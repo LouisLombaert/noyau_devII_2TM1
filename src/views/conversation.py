@@ -17,7 +17,7 @@ from kivy.uix.scrollview import ScrollView
 from src.config import config
 from src.libs.bot.commands import Commands
 from src.models.message import Message
-
+from src.models.mongo_connector import MongoConnector
 
 Builder.load_file("{0}/conversation.kv".format(config.VIEWS_DIR))
 
@@ -46,20 +46,33 @@ class ConversationContainer(ScrollView):
         self.messages_box = self.ids.messages_container
 
         # Démarrer la mise à jour régulière de la conversation
-        self.constant_update()
+        self.constant_update(channel_id)
 
-    def constant_update(self):
-        self.init_conversation()
+    def constant_update(self, channel_id):
+        self.init_conversation(channel_id)
         # time.sleep(1)
 
-    def init_conversation(self):
-        conv_file_path = config.PUBLIC_DIR + "/tmp_conversations/basic.json"
-        with open(conv_file_path) as json_file:
-            conv = json.load(json_file)
+    def init_conversation(self, channel_id):
+        try:
+            with MongoConnector() as connector:
+                collection = connector.db["messages"].find()
+                for document in collection:
+                    print(channel_id)
+                    if document['channel_id'] == channel_id:
+                        print("ici")
+                        msg = MessageSent(text=document["timestamp"] + " - " + document["sender"] + "\n" + document["msg"])
+                        self.messages_box.add_widget(msg, len(self.messages_box.children))
+        except Exception as e:
+            print(e)
 
-        for message in conv["data"]:
-            msg = MessageSent(text=message["timestamp"] + " - " + message["sender"] + "\n" + message["msg"])
-            self.messages_box.add_widget(msg, len(self.messages_box.children))
+
+        #conv_file_path = config.PUBLIC_DIR + "/tmp_conversations/basic.json"
+        #with open(conv_file_path) as json_file:
+        #    conv = json.load(json_file)
+
+        #for message in conv["data"]:
+        #    msg = MessageSent(text=message["timestamp"] + " - " + message["sender"] + "\n" + message["msg"])
+        #    self.messages_box.add_widget(msg, len(self.messages_box.children))
 
     def add_message(self, msg_obj, pos="left"):
         msg = MessageSent()
@@ -84,7 +97,8 @@ class Conversation(RelativeLayout):
         txt = self.inputs_container.ids.message_input.text
 
         if txt:
-            msg = Message(datetime.now(), txt, "Moi")
+            msg = Message(datetime.now(), txt, "Moi", self.messages_container.channel_id)
+            print(self.messages_container.channel_id)
             self.messages_container.add_message(msg)
             msg.send_to_db()
 
@@ -95,4 +109,3 @@ class Conversation(RelativeLayout):
                 self.messages_container.add_message(msg_res, pos="right")
 
             self.inputs_container.ids.message_input.text = ""
-
